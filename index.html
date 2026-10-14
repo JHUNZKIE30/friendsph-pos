@@ -1,1 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#123c32">
+  <title>FRIENDSPH POS</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f2f5f4;
+      color: #172b26;
+    }
+    header {
+      background: #123c32;
+      color: white;
+      padding: 20px;
+    }
+    header h1 { margin: 0 0 6px; }
+    main { max-width: 1000px; margin: auto; padding: 16px; }
+    .panel {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px #0000000d;
+    }
+    input, button {
+      width: 100%;
+      padding: 12px;
+      margin: 5px 0;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+    input { border: 1px solid #ccd5d1; }
+    button {
+      background: #176b50;
+      color: white;
+      border: 0;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .secondary { background: #43554f; }
+    .product {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid #e4e9e6;
+      padding: 10px 0;
+    }
+    .product button { width: auto; }
+    .total { font-size: 24px; font-weight: bold; }
+    .note { color: #52645d; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>FRIENDSPH POS</h1>
+    <div>Retail Point of Sale</div>
+  </header>
 
+  <main>
+    <section class="panel">
+      <h2>Add Product</h2>
+      <input id="name" placeholder="Product name">
+      <input id="price" type="number" min="0" step="0.01" placeholder="Price (₱)">
+      <input id="stock" type="number" min="0" step="1" placeholder="Starting stock">
+      <button onclick="addProduct()">Save Product</button>
+      <p class="note">Demo version: products are saved on this device.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Products</h2>
+      <div id="products">No products yet.</div>
+    </section>
+
+    <section class="panel">
+      <h2>Current Sale</h2>
+      <div id="cart">Wala pang item sa cart.</div>
+      <p class="total">Total: ₱<span id="total">0.00</span></p>
+      <input id="cash" type="number" min="0" step="0.01" placeholder="Cash received (₱)">
+      <button onclick="checkout()">Complete Sale</button>
+      <p id="change"></p>
+    </section>
+
+    <section class="panel">
+      <h2>Sales History</h2>
+      <button class="secondary" onclick="showSales()">Refresh Sales</button>
+      <div id="sales">Wala pang sales.</div>
+    </section>
+  </main>
+
+  <script>
+    const load = key => {
+      try { return JSON.parse(localStorage.getItem(key)) || []; }
+      catch { return []; }
+    };
+    let products = load("friendsph_products");
+    let cart = [];
+    let sales = load("friendsph_sales");
+
+    const money = n => Number(n).toFixed(2);
+
+    function save() {
+      localStorage.setItem("friendsph_products", JSON.stringify(products));
+      localStorage.setItem("friendsph_sales", JSON.stringify(sales));
+    }
+
+    function addProduct() {
+      const name = document.getElementById("name").value.trim();
+      const price = Number(document.getElementById("price").value);
+      const stock = Number(document.getElementById("stock").value);
+
+      if (!name || document.getElementById("price").value === "" ||
+          document.getElementById("stock").value === "" ||
+          !Number.isFinite(price) || price < 0 ||
+          !Number.isInteger(stock) || stock < 0) {
+        alert("Enter a product name, valid price, and whole-number stock.");
+        return;
+      }
+
+      products.push({
+        id: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())),
+        name, price, stock
+      });
+      save();
+      document.getElementById("name").value = "";
+      document.getElementById("price").value = "";
+      document.getElementById("stock").value = "";
+      renderProducts();
+    }
+
+    function renderProducts() {
+      const el = document.getElementById("products");
+      if (!products.length) {
+        el.textContent = "No products yet.";
+        return;
+      }
+      el.replaceChildren();
+      products.forEach(p => {
+        const row = document.createElement("div");
+        row.className = "product";
+        const info = document.createElement("span");
+        info.textContent = `${p.name} — ₱${money(p.price)} | Stock: ${p.stock}`;
+        const btn = document.createElement("button");
+        btn.textContent = "Add";
+        btn.disabled = p.stock <= 0;
+        btn.onclick = () => addToCart(p.id);
+        row.append(info, btn);
+        el.append(row);
+      });
+    }
+
+    function addToCart(id) {
+      const p = products.find(x => x.id === id);
+      if (!p || p.stock <= cart.filter(x => x.id === id).length) {
+        alert("Not enough stock.");
+        return;
+      }
+      cart.push({ id: p.id, name: p.name, price: p.price });
+      renderCart();
+    }
+
+    function renderCart() {
+      const el = document.getElementById("cart");
+      el.replaceChildren();
+      if (!cart.length) {
+        el.textContent = "Wala pang item sa cart.";
+      } else {
+        cart.forEach((item, i) => {
+          const row = document.createElement("div");
+          row.className = "product";
+          const info = document.createElement("span");
+          info.textContent = `${item.name} — ₱${money(item.price)}`;
+          const btn = document.createElement("button");
+          btn.className = "secondary";
+          btn.textContent = "Remove";
+          btn.onclick = () => {
+            cart.splice(i, 1);
+            renderCart();
+          };
+          row.append(info, btn);
+          el.append(row);
+        });
+      }
+      document.getElementById("total").textContent =
+        money(cart.reduce((sum, item) => sum + item.price, 0));
+    }
+
+    function checkout() {
+      if (!cart.length) {
+        alert("Add a product to the sale first.");
+        return;
+      }
+      const cashField = document.getElementById("cash");
+      const cash = Number(cashField.value);
+      const total = cart.reduce((sum, item) => sum + item.price, 0);
+      if (cashField.value === "" || !Number.isFinite(cash) || cash < total) {
+        alert("Cash received must be at least the sale total.");
+        return;
+      }
+      for (const item of cart) {
+        const p = products.find(x => x.id === item.id);
+        if (!p || p.stock <= 0) {
+          alert("Stock changed. Please review the cart.");
+          return;
+        }
+      }
+      cart.forEach(item => {
+        products.find(x => x.id === item.id).stock--;
+      });
+      sales.push({
+        date: new Date().toLocaleString(),
+        items: cart.map(x => ({ ...x })),
+        total,
+        cash,
+        change: cash - total
+      });
+      save();
+      document.getElementById("change").textContent =
+        "Change: ₱" + money(cash - total);
+      cart = [];
+      cashField.value = "";
+      renderProducts();
+      renderCart();
+      showSales();
+      alert("Sale saved on this device.");
+    }
+
+    function showSales() {
+      const el = document.getElementById("sales");
+      el.replaceChildren();
+      if (!sales.length) {
+        el.textContent = "Wala pang sales.";
+        return;
+      }
+      [...sales].reverse().forEach(s => {
+        const row = document.createElement("p");
+        row.textContent = `${s.date} — ₱${money(s.total)} (Change ₱${money(s.change)})`;
+        el.append(row);
+      });
+    }
+
+    renderProducts();
+    renderCart();
+    showSales();
+  </script>
+</body>
+</html>
